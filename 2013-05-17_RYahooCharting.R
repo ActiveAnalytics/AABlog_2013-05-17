@@ -65,7 +65,7 @@ plotChart <- function(){
 
 # Running the process
 CurrTime <- Sys.time()
-while(CurrTime < CurrTime + 60*60){
+while(Sys.time() < CurrTime + 60*60){
 UpdateStockData("GOOG")
 plotChart()
 Sys.sleep(30)
