@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset='utf-8'>
+    <meta http-equiv="X-UA-Compatible" content="chrome=1">
+
+    <link rel="stylesheet" type="text/css" href="stylesheets/stylesheet.css" media="screen" />
+    <link rel="stylesheet" type="text/css" href="stylesheets/pygment_trac.css" media="screen" />
+    <link rel="stylesheet" type="text/css" href="stylesheets/print.css" media="print" />
+
+    <title>Active Analytics Ltd Blog by ActiveAnalytics</title>
+  </head>
+
+  <body>
+
+    <header>
+      <div class="container">
+        <h1>Active Analytics Ltd Blog</h1>
+        <h2>Plotting live charts with Yahoo Finance data and ggplot2 in R </h2>
+
+        <section id="downloads">
+          <a href="https://github.com/ActiveAnalytics/AABlog/zipball/master" class="btn">Download as .zip</a>
+          <a href="https://github.com/ActiveAnalytics/AABlog/tarball/master" class="btn">Download as .tar.gz</a>
+          <a href="https://github.com/ActiveAnalytics/AABlog" class="btn btn-github"><span class="icon"></span>View on GitHub</a>
+        </section>
+      </div>
+    </header>
+
+    <div class="container">
+      <section id="main_content">
+        <h1>Plotting live charts with Yahoo Finance data and ggplot2 in R</h1>
+
+<h2>Google stock price with 'live' data from Yahoo Finance</h2>
+
+<p>by <a href="http://www.activeanalytics.co.uk/">Active Analytics</a>
+<img src="https://raw.github.com/ActiveAnalytics/AABlog/master/2013-05-17_RYahooCharting/plot2.jpg" alt="Drawing"></p>
+
+<p><a href="https://raw.github.com/ActiveAnalytics/AABlog/master/2013-05-17_RYahooCharting/plot2.jpg">Link to the picture</a></p>
+
+<h2>News</h2>
+
+<p>There are a few announcements that need to be made before I launch into this week's blog.</p>
+
+<h3>Active Analytics Ltd : New R Course: R for Reserving Actuaries</h3>
+
+<p>This course is a two-day course for people that have already been on the three day <a href="http://www.activeanalytics.co.uk/r-training">Introduction to R course</a>. The program is as follows</p>
+
+<ol>
+<li>Data structures for reserving data in R</li>
+<li>Plotting for reserving data</li>
+<li>Writing your own reserving methods and working with data in R</li>
+<li>Chain Ladder</li>
+<li>Cape Cod</li>
+<li>Curve Fitting methods</li>
+<li>Generalized linear models</li>
+<li>Introduction to the <a href="http://cran.r-project.org/web/packages/ChainLadder/">ChainLadder</a> package</li>
+<li>Introduction to space state methods for reserving in R</li>
+<li>Simulation methods for reserving in R</li>
+</ol><h3>The R In Insurance Conference</h3>
+
+<p>I would like to mention the <a href="http://lamages.blogspot.co.uk/2013/05/r-in-insurance-programme-and-abstracts.html">R in Insurance Conference</a>. There will be very interesting talks, from all major fields of actuarial practice: reserving, pricing, capital modelling, catastrophe modelling and many other interesting R-related tools and techniques that are relevant this field. R is a very important statistical, data mining,  data manipulation and analysis tool in many sectors and is beginning to make inroads in the insurance market. Its adoption is really a no-brainer when you consider its tool-set and versatility.</p>
+
+<h2>Introduction</h2>
+
+<p>I have been pretty busy with work and travelling this week and the nature of this blog entry required an internet connection to ensure that the code works properly, so it has taken a little longer to get it together. </p>
+
+<p>The principle aim is simple, you would like to pull some stock price data from Yahoo Finance, live (in this case it is delayed) and plot this in R. Of course you can choose to analyse the data live as well as plotting, but today we will keep it simple and focus on pulling the data from the <a href="https://code.google.com/p/yahoo-finance-managed/wiki/YahooFinanceAPIs">Yahoo Finance  CSV API</a> and plotting in <a href="http://cran.r-project.org/web/packages/ggplot2/index.html">ggplot2</a>. </p>
+
+<p>You could also choose to plot using Google charts, and if you are working with R, there is a great package <a href="https://code.google.com/p/google-motion-charts-with-r/">googleVis</a> by Markus Gesmann. His googleVis blog is located <a href="http://lamages.blogspot.co.uk/search/label/googleVis">here</a>. Incidentally, he is one of the organizers of the R In Insurance Conference.</p>
+
+<p>We require just two packages here, ggplot2, and <a href="http://cran.r-project.org/web/packages/gridExtra/index.html">gridExtra</a> which as well as providing more functionality to the grid package allows us to arrange ggplot2 charts together.</p>
+
+<pre><code>options(stringsAsFactors = F)
+require(ggplot2)
+require(gridExtra)
+</code></pre>
+
+<h2>Downloading stock quote data from the Yahoo Finance API</h2>
+
+<p>I use the 'live' to describe the live data because, it is made clear that the stock data is delayed. We will be concerned with loading data using the CSV api, which really only involves creating the the appropriate URL. A simple tutorial on creating this URL is given <a href="https://code.google.com/p/yahoo-finance-managed/wiki/csvQuotesDownload">here</a> and the property list of the items is given <a href="https://code.google.com/p/yahoo-finance-managed/wiki/enumQuoteProperty">here</a>.</p>
+
+<p>The first thing I do is to create an environment to store the data, this is not essential but often with processes like this it may be safer not to have the source data frame hanging around the global environment so that it is not unexpectedly changed and so we are forced to <code>get()</code> and <code>assign()</code> values to it.</p>
+
+<pre><code># Creating the environment
+assign("envPrevData", new.env(), envir = .GlobalEnv)
+</code></pre>
+
+<p>We then use the <code>paste()</code> function to generate our URL query and download it using the <code>read.table()</code> function. The time given for the stock quote is to the nearest minute but we can download more frequently than this. I have chosen to use the system time <code>Sys.time()</code> on the machine which is will be the time just after I made the query. In addition, the time I am using is local here, <code>BST</code> but obviously "GOOG" is traded on NASDAQ which has <code>EDT</code>.</p>
+
+<p>Each call to this function will obtain a row of data ready to be appended to the main data frame.</p>
+
+<pre><code># Function to get the data
+GetLiveData &lt;- function(sSymbol = "GOOG")
+{
+    sAddress &lt;- paste("http://download.finance.yahoo.com/d/quotes.csv?s=", 
+        sSymbol, "&amp;f=nsb2b3v0&amp;e=.csv", sep = "")
+    cat("Downloading data from ", sAddress, "\n")
+    dfYahooData &lt;- read.table(sAddress, sep = ",", header = F)
+    # I chose to create my own time 
+    Time &lt;- Sys.time()
+    # Appending the time to the data frame
+    dfYahooData &lt;- cbind(dfYahooData, "Time" = Time)
+    # Adding the column names
+    names(dfYahooData) &lt;- c("Name", "Symbol", "Ask", "Bid", "Volume", "Time")
+    dfYahooData
+}
+</code></pre>
+
+<h2>The stock update function</h2>
+
+<p>Once we have downloaded the data we need a function to ensure that it is appended to the main data frame. The other nice thing about working with environments is that any name you want is already a <code>NULL</code> and you can append to it. For instance, if dfStockData does not exist in the global environment, you cannot append data to it for example, this</p>
+
+<pre><code># Here dfCurr exists but dfStockData does not
+rbind.data.frame(dfStockData, dfCurr)
+</code></pre>
+
+<p>Would give an error since dfStockData does not exist but if we create an environment "envPrevData", we can just do this</p>
+
+<pre><code># Here dfCurr exists but dfStockData does not
+rbind.data.frame(envPrevData$dfStockData, dfCurr)
+</code></pre>
+
+<p>and carry on spontaneously appending or assigning things as we like. I take advantage of this to append the data to a data frame the environment without worrying about initializing it first</p>
+
+<pre><code># Function to update the current data
+UpdateStockData &lt;- function(sSymbol = "GOOG")
+{
+    envPrevData &lt;- get("envPrevData", envir = .GlobalEnv, mode = "environment")
+    dfCurr &lt;- GetLiveData(sSymbol = sSymbol)
+    print(dfCurr)
+    try(envPrevData$dfStockData &lt;- rbind.data.frame(envPrevData$dfStockData, dfCurr))
+    assign("envPrevData", envPrevData, envir = .GlobalEnv)
+
+    invisible()
+}
+</code></pre>
+
+<h2>The plotting function</h2>
+
+<p>The plotting function is a bit of a beast, it has to be admitted. Just consider that there are three parts.</p>
+
+<ol>
+<li>Some small data preparation to get the bid and ask movements. The midpoint is also calculated though it and the bid movements are not used.</li>
+<li>The first plot creates the bid-ask line range chart on the top.</li>
+<li>The second plot creates the volume bar chart below bid ask chart</li>
+</ol><pre><code># The plot function
+plotChart &lt;- function(){
+    # Here we get the data
+    envPrevData &lt;- get("envPrevData", envir = .GlobalEnv, mode = "environment")
+    dfStockData &lt;- envPrevData$dfStockData
+    # We only want to plot if we have five or more points
+    if(nrow(dfStockData) &gt; 4){
+        # 1. We prepare the data
+        AskMovement &lt;- factor(sign(c(0, diff(dfStockData$Ask))), levels = c(-1, 0, 1), 
+            labels = c("Down", "No Change", "Up"))
+        BidMovement &lt;- factor(sign(c(0, diff(dfStockData$Bid))), levels = c(-1, 0, 1), 
+            labels = c("Down", "No Change", "Up"))
+        VolumeChange &lt;- c(0, diff(dfStockData$Volume))
+        dfStockData &lt;- data.frame(dfStockData, AskMovement, BidMovement, VolumeChange)
+
+        dfStockData$Mid &lt;- with(dfStockData, .5*(Bid + Ask))
+
+        # 2. This is the first plot for the Bid-Ask
+        bAPlot &lt;- ggplot(dfStockData, aes(Time, Mid,
+          ymin = Bid, ymax= Ask, colour = AskMovement))
+        bAPlot &lt;- bAPlot + geom_linerange(lwd = 1.5) + xlab("") + ylab("Price\n")
+        bAPlot &lt;- bAPlot +  theme(legend.position = "top", 
+            plot.margin = unit(c(0, .5, -1.5, 0), "lines"), 
+            axis.text.y = element_text(angle = 90), axis.text.x = element_blank()) + 
+            labs(colour = "Ask Movement") + 
+            xlim(range(dfStockData$Time)) + 
+            scale_colour_manual(values=c("red", "blue", "green"))
+
+        # 3. This is the Volume change plot
+        VolPlot &lt;- qplot(y = VolumeChange, x = Time, data=dfStockData, 
+            geom="bar", stat = "identity", fill = AskMovement)
+        VolPlot &lt;- VolPlot + theme(legend.position = "none", 
+            plot.margin = unit(c(0, .5, 0, 0), "lines"), 
+            axis.text.y = element_text(angle = 90)) + 
+            xlab("\nTime") + ylab("Volume Change\n") +
+            xlim(range(dfStockData$Time)) + 
+            scale_colour_manual(values=c("red", "blue", "green"))
+
+        # We use grid arrange to arrange the plots
+        grid.arrange(bAPlot, VolPlot, nrow = 2, heights = c(1.5, 1))
+    }
+}
+</code></pre>
+
+<h2>Executing the process</h2>
+
+<p>We Finally bring everything together and run the code</p>
+
+<pre><code># Running the process
+CurrTime &lt;- Sys.time()
+while(Sys.time() &lt; CurrTime + 60*60){
+    UpdateStockData("GOOG")
+    plotChart()
+    Sys.sleep(30)
+}
+</code></pre>
+
+<h2>Conclusion</h2>
+
+<p>This is clearly a quick and dirty example, but shows how you can start constructing your own analysis tool based on 'live' quotes from Yahoo. The Yahoo Finance CSV api is very easy to use but there are some unfortunate problems. The bid and ask volumes can come down with commas for separating thousands zeros which is a great shame for a CSV formatted object. I have no idea why commas should be in numbers in the first place - unless you take them as decimal points in which case a very different separator should be used.</p>
+
+<p>To get interactive graphics, the Google charts api is good and the googleVis package is convenient for R programmers.</p>
+
+<p>The complete code for this blog is located <a href="https://github.com/ActiveAnalytics/AABlog/blob/master/2013-05-17_RYahooCharting/2013-05-17_RYahooCharting.R">here</a></p>
+
+<p><a href="http://www.activeanalytics.co.uk/">Chibisi Chima-Okereke</a></p>
+      </section>
+    </div>
+
+    
+  </body>
+</html>
