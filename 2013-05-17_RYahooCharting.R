@@ -8,7 +8,8 @@ assign("envPrevData", new.env(), envir = .GlobalEnv)
 # Function to get the data
 GetLiveData <- function(sSymbol = "GOOG")
 {
-	sAddress <- paste("http://download.finance.yahoo.com/d/quotes.csv?s=", sSymbol, "&f=nsb2b3v0&e=.csv", sep = "")
+	sAddress <- paste("http://download.finance.yahoo.com/d/quotes.csv?s=", 
+		sSymbol, "&f=nsb2b3v0&e=.csv", sep = "")
 	cat("Downloading data from ", sAddress, "\n")
 	dfYahooData <- read.table(sAddress, sep = ",", header = F)
 	Time <- Sys.time()
@@ -34,8 +35,10 @@ plotChart <- function(){
 	envPrevData <- get("envPrevData", envir = .GlobalEnv, mode = "environment")
 	dfStockData <- envPrevData$dfStockData
 	if(nrow(dfStockData) > 4){
-		AskMovement <- factor(sign(c(0, diff(dfStockData$Ask))), levels = c(-1, 0, 1), labels = c("Down", "No Change", "Up"))
-		BidMovement <- factor(sign(c(0, diff(dfStockData$Bid))), levels = c(-1, 0, 1), labels = c("Down", "No Change", "Up"))
+		AskMovement <- factor(sign(c(0, diff(dfStockData$Ask))), levels = c(-1, 0, 1), 
+			labels = c("Down", "No Change", "Up"))
+		BidMovement <- factor(sign(c(0, diff(dfStockData$Bid))), levels = c(-1, 0, 1), 
+			labels = c("Down", "No Change", "Up"))
 		VolumeChange <- c(0, diff(dfStockData$Volume))
 		dfStockData <- data.frame(dfStockData, AskMovement, BidMovement, VolumeChange)
 		
@@ -45,10 +48,12 @@ plotChart <- function(){
 		  ymin = Bid, ymax= Ask, colour = AskMovement))
 		bAPlot <- bAPlot + geom_linerange(lwd = 1.5) + xlab("") + ylab("Price\n")
 		bAPlot <- bAPlot +  theme(legend.position = "top", plot.margin = unit(c(0, .5, -1.5, 0), "lines"), 
-			axis.text.y = element_text(angle = 90), axis.text.x = element_blank()) + labs(colour = "Ask Movement") + 
+			axis.text.y = element_text(angle = 90), axis.text.x = element_blank()) + 
+			labs(colour = "Ask Movement") + 
 			xlim(range(dfStockData$Time)) + scale_colour_manual(values=c("red", "blue", "green"))
 			
-		VolPlot <- qplot(y = VolumeChange, x = Time, data=dfStockData, geom="bar", stat = "identity", fill = AskMovement)
+		VolPlot <- qplot(y = VolumeChange, x = Time, data=dfStockData, geom="bar", 
+			stat = "identity", fill = AskMovement)
 		VolPlot <- VolPlot + theme(legend.position = "none", plot.margin = unit(c(0, .5, 0, 0), "lines"), 
 			axis.text.y = element_text(angle = 90)) + xlab("\nTime") + ylab("Volume Change\n") +
 			xlim(range(dfStockData$Time)) + scale_colour_manual(values=c("red", "blue", "green"))
